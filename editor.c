@@ -14,7 +14,7 @@ void editor(SDL_Window* pWindow){
                     SDL_RenderCopy(pRenderer,pTexture,NULL,&dest); // Copie du sprite grâce au SDL_Renderer
 
                     SDL_RenderPresent(pRenderer); // Affichage
-                    SDL_Delay(13000); /* Attendre 13 secondes, que l'utilisateur voit la fenêtre */
+
 
                     SDL_DestroyTexture(pTexture); // Libération de la mémoire associée à la texture
                 }

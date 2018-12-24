@@ -3,6 +3,8 @@
 
 int main( int argc, char * argv[] )
 {
+    SDL_Event event;
+    int toContinue = 1;
     if (SDL_Init(SDL_INIT_VIDEO) != 0){
         fprintf(stdout,"Echec : %s \n", SDL_GetError());
     }
@@ -12,6 +14,12 @@ int main( int argc, char * argv[] )
 
     if (pWindow){
         editor(pWindow);
+        while (toContinue) {
+            SDL_WaitEvent(&event);
+            if (event.type == SDL_QUIT){
+                toContinue = 0;
+            }
+        }
         SDL_DestroyWindow(pWindow);
     }
 
