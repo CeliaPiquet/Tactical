@@ -1,4 +1,41 @@
 #include "../Headers/editor.h"
+//to change
+int toContinue = 1,
+    clickingLeft = 0,
+    clickingRight = 0;
+
+void displayActualTile(Tile* actualTile, SDL_Renderer* pRenderer){
+    Tile* next, *previous;
+    next = actualTile->next;
+    previous = actualTile->previous;
+    SDL_Rect posPrev, posAct, posNext;
+
+    posPrev.x = WINDOW_WIDTH + 10;
+    posPrev.y = WINDOW_HEIGHT - TILE_SIZE - 10;
+    posPrev.h = TILE_SIZE;
+    posPrev.w = TILE_SIZE;
+
+    posAct.x = WINDOW_WIDTH + WINDOW_WIDTH/4 -10;
+    posAct.y = WINDOW_HEIGHT - TILE_SIZE - 10;
+    posAct.h = TILE_SIZE;
+    posAct.w = TILE_SIZE;
+
+    posNext.x = WINDOW_WIDTH + WINDOW_WIDTH/2 - (TILE_SIZE+10);
+    posNext.y = WINDOW_HEIGHT - TILE_SIZE - 10;
+    posNext.h = TILE_SIZE;
+    posNext.w = TILE_SIZE;
+
+    SDL_RenderCopy(pRenderer, previous->texture , NULL,&posPrev);
+    SDL_RenderCopy(pRenderer, actualTile->texture , NULL,&posAct);
+    SDL_RenderCopy(pRenderer, next->texture , NULL,&posNext);
+}
+
+int isEventInMap(SDL_Event * event){
+    if (event->button.x < WINDOW_WIDTH){
+        return 1;
+    }
+    return 0;
+}
 
 int** newMap(){
     int i;
@@ -13,27 +50,29 @@ int** newMap(){
         }
         return map;
     }
+    return NULL;
 }
 
-void updateScreen(int ** map, SDL_Rect position, SDL_Renderer *pRenderer, SDL_Texture *waterTexture,SDL_Texture *grassTexture){
+void updateScreen(int ** map, SDL_Renderer *pRenderer, TilesList* tilesList, Tile* actualTile){
     int i, j;
+    SDL_Rect position;
+    Tile* tile;
     for (i = 0 ; i < MAP_HEIGHT ; i++){
         for (j = 0 ; j < MAP_WIDTH ; j++){
             position.x = i * TILE_SIZE;
             position.y = j * TILE_SIZE;
             position.w = TILE_SIZE;
             position.h = TILE_SIZE;
-            switch(map[i][j]){
-                case 1:
-                    SDL_RenderCopy(pRenderer,waterTexture,NULL,&position);
-                    break;
-                case 2:
-                    SDL_RenderCopy(pRenderer,grassTexture,NULL,&position);
-                    break;
+            if (map[i][j] != 0){
+                tile = getTileById(tilesList, map[i][j]);
+                SDL_RenderCopy(pRenderer, tile->texture, NULL, &position);
             }
         }
     }
+    menu(pRenderer);
+    displayActualTile(actualTile, pRenderer);
     SDL_RenderPresent(pRenderer);
+
 }
 
 void freeMap(int ** map, int lines) {
@@ -44,97 +83,146 @@ void freeMap(int ** map, int lines) {
     free(map);
 }
 
-void editor(SDL_Window* screen){
-    //initializing
-    SDL_Event event;                                                                            //event from the user
-    int i, j;
-    int actualSprite = 1;
-    int ** map = newMap();                                                                      //array with 20 columns and 10 lines
-    int toContinue = 1,
-        clickingLeft = 0,
-        clickingRight = 0;                                                                      //boolean for the end of the loops
-    SDL_Surface *water = NULL, *grass = NULL;
-    SDL_Texture *waterTexture = NULL, *grassTexture = NULL;                                                   //initializing the surfaces
-    SDL_Rect position;                                                                          //represents the place we want to change
-    SDL_Renderer *pRenderer = SDL_CreateRenderer(screen,-1,SDL_RENDERER_ACCELERATED);           // creation of a SDL_Renderer using hardware acceleration (faster)
+void createTextures(TilesList* tilesList, SDL_Renderer* pRenderer){
+    Tile* actualTile = tilesList->first;
+    SDL_Surface* tileSurface = NULL;
+    SDL_Texture* tileTexture = NULL;
+    do {
+        tileSurface = SDL_LoadBMP(actualTile->path);
+        tileTexture = SDL_CreateTextureFromSurface(pRenderer,tileSurface);
+        actualTile->texture = tileTexture;
+        actualTile = actualTile->next;
+    } while (actualTile != tilesList->first);
+    SDL_FreeSurface(tileSurface);
+}
 
+void changeClickingLeft(int x){
+    clickingLeft = x;
+}
 
-    //loading of the different objects and creating their texture, once we have the textures we can free the surfaces
-    grass = SDL_LoadBMP("./sprites/grass.bmp");
-    water = SDL_LoadBMP("./sprites/water.bmp");
-    waterTexture = SDL_CreateTextureFromSurface(pRenderer,water);
-    grassTexture = SDL_CreateTextureFromSurface(pRenderer,grass);
-    SDL_FreeSurface(water);
-    SDL_FreeSurface(grass);
+void changeClickingRight(int x){
+    clickingRight = x;
+}
 
-    if (map != NULL && grass && water && pRenderer && waterTexture && grassTexture){         //we check if everything has been correctly created
-        while (toContinue){
-            SDL_WaitEvent(&event);
-                switch(event.type){
-                    case SDL_QUIT:
-                        toContinue = 0;
-                        break;
-                    case SDL_MOUSEBUTTONDOWN :
-                        if (event.button.button == SDL_BUTTON_LEFT) {
-                            map[event.button.x / TILE_SIZE][event.button.y / TILE_SIZE] = actualSprite;
-                            clickingLeft = 1;                                                                        // On active le booléen pour retenir que le bouton gauche est enfoncé
-                        }
-
-                        else if (event.button.button == SDL_BUTTON_RIGHT) {                         // Le clic droit sert à effacer
-                            map[event.button.x / TILE_SIZE][event.button.y /TILE_SIZE] = 0;
-                            clickingRight = 1;
-                        }
-                        break;
-                    case SDL_MOUSEBUTTONUP:                                                       // On désactive le booléen qui disait qu'un bouton était enfoncé
-                        if (event.button.button == SDL_BUTTON_LEFT){
-                            clickingLeft = 0;
-                        }
-                        else if (event.button.button == SDL_BUTTON_RIGHT){
-                            clickingRight = 0;
-                        }
-                        break;
-                    case SDL_MOUSEMOTION:
-                        if (clickingLeft) {                                                         // in case the click
-                            map[event.motion.x / TILE_SIZE][event.motion.y / TILE_SIZE] = actualSprite;
-                        }
-                        else if (clickingRight){                                                    // same for the right click
-                            map[event.motion.x / TILE_SIZE][event.motion.y / TILE_SIZE] = 0;
-                        }
-                        break;
-
-                    case SDL_KEYDOWN:
-                        switch(event.key.keysym.sym){
-                            case SDLK_ESCAPE:
-                                toContinue = 0;
-                                break;
-                            case SDLK_PAGEUP:
-                                actualSprite = (actualSprite + 1)% TILE_TOTAL;
-                                break;
-                            case SDLK_PAGEDOWN:
-                                actualSprite = (actualSprite - 1);
-                                break;
-                            case SDLK_s:
-                                saveMap(map,MAP_HEIGHT,MAP_WIDTH);
-                                break;
-                        }
-                        break;
-                }
-
-                //clean the screen after each event
-                SDL_SetRenderDrawColor(pRenderer,255,255,255,255);
-                SDL_RenderClear(pRenderer);
-
-
-                 // Placement des objets à l'écran et mise à jour
-                updateScreen(map, position, pRenderer, waterTexture,grassTexture);
-
-
+int mouseButtonDown(SDL_Event *event, int ** map,Tile* actualTile, SDL_Renderer * pRenderer,TilesList* tilesList){
+    if (isEventInMap(event)){
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            map[event->button.x / TILE_SIZE][event->button.y / TILE_SIZE] = actualTile->id;
+            updateScreen(map, pRenderer, tilesList, actualTile);
+            changeClickingLeft(1);
+            return 1;
         }
-        freeMap(map, MAP_HEIGHT);
-        SDL_DestroyTexture(waterTexture);
-        SDL_DestroyTexture(grassTexture);
-        SDL_DestroyRenderer(pRenderer);
+
+        else if (event->button.button == SDL_BUTTON_RIGHT ) {
+            map[event->button.x / TILE_SIZE][event->button.y /TILE_SIZE] = 0;
+            updateScreen(map, pRenderer, tilesList, actualTile);
+            changeClickingRight(1);
+            return 1;
+        }
     }
+    return 0;
+}
 
+int mouseButtonUp(SDL_Event *event){
+    if (isEventInMap(event)){
+        if (event->button.button == SDL_BUTTON_LEFT){
+            changeClickingLeft(0);
+            return 1;
+        }
+        else if (event->button.button == SDL_BUTTON_RIGHT){
+            changeClickingRight(0);
+            return 1;
+        }
+        return 0;
+    }
+    return 0;
+}
 
+int mouseMotion(SDL_Event *event, int ** map,Tile* actualTile, SDL_Renderer * pRenderer,TilesList* tilesList){
+    if (isEventInMap(event)){
+        if (clickingLeft) {                                                         // in case the click
+            map[event->motion.x / TILE_SIZE][event->motion.y / TILE_SIZE] = actualTile->id;
+            updateScreen(map, pRenderer, tilesList, actualTile);
+            return 1;
+        }
+        else if (clickingRight){                                                    // same for the right click
+            map[event->motion.x / TILE_SIZE][event->motion.y / TILE_SIZE] = 0;
+            updateScreen(map, pRenderer, tilesList, actualTile);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void editor(){
+    TilesList* tilesList = generateList();
+    Tile* actualTile = tilesList->first;
+    SDL_Window* screen = NULL;
+    SDL_Event event;
+    int ** map = newMap();                                                                                                                     //array with 20 columns and 10 lines
+    screen = SDL_CreateWindow("New Map",SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH +(WINDOW_WIDTH/2),WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
+    if (screen && map && tilesList){
+        SDL_Renderer *pRenderer = SDL_CreateRenderer(screen,-1,SDL_RENDERER_ACCELERATED);                                                     // creation of a SDL_Renderer using hardware acceleration (faster)
+        if (pRenderer){
+            createTextures(tilesList, pRenderer);
+            updateScreen(map, pRenderer, tilesList, actualTile);                                                                                          //create all the textures from the tiles list
+            while (toContinue){
+                SDL_WaitEvent(&event);
+                switch(event.type){
+                        case SDL_WINDOWEVENT :
+                            if (event.window.event == SDL_WINDOWEVENT_CLOSE){
+                                toContinue = 0;
+                            }
+                            break;
+                        case SDL_MOUSEBUTTONDOWN :
+                            mouseButtonDown(&event, map, actualTile, pRenderer, tilesList);
+                            break;
+                        case SDL_MOUSEBUTTONUP:
+                            mouseButtonUp(&event);
+                            break;
+                        case SDL_MOUSEMOTION:
+                            mouseMotion(&event, map, actualTile, pRenderer, tilesList);
+                            break;
+
+                        case SDL_KEYDOWN:
+                            switch(event.key.keysym.sym){
+                                case SDLK_ESCAPE:
+                                    toContinue = 0;
+                                    break;
+                                case SDLK_RIGHT:     //change
+                                    if (actualTile->next->id != 0){
+                                        actualTile = actualTile->next;
+                                    }
+                                    else {
+                                        actualTile = actualTile->next->next;
+                                    }
+                                    updateScreen(map, pRenderer, tilesList, actualTile);
+                                    break;
+                                case SDLK_LEFT:
+                                    if (actualTile->previous->id != 0){
+                                        actualTile = actualTile->previous;
+                                    }
+                                    else {
+                                        actualTile = actualTile->previous->previous;
+                                    }
+                                    updateScreen(map, pRenderer, tilesList, actualTile);
+                                    break;
+                                case SDLK_s:
+                                    saveMap(map);
+                                    break;
+                                case SDLK_o:
+                                    openMap(map);
+                                    updateScreen(map, pRenderer, tilesList, actualTile);
+                                    break;
+                            }
+                            break;
+                    }
+                    //clean the screen after each event
+                    SDL_RenderClear(pRenderer);
+            }
+            freeMap(map, MAP_HEIGHT);
+            SDL_DestroyRenderer(pRenderer);
+            freeTilesList(tilesList);
+        }
+    }
 }
